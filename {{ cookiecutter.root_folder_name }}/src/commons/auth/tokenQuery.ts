@@ -1,5 +1,6 @@
-import { QueryClient, QueryFunctionContext } from "react-query";
-import { useState } from "react";
+import { QueryClient, QueryFunctionContext, QueryObserver } from "react-query";
+import { useEffect, useState } from "react";
+import { isEqual } from "lodash";
 
 export interface Config<TToken, TLoginParams> {
   tokenExpired: (token: TToken) => Promise<boolean>;
@@ -87,7 +88,7 @@ function createTokenQuery<TToken, TLoginParams>({
 
   const login = async (loginParams: TLoginParams) => {
     const token = await queryClient.fetchQuery(
-      `temp-refresh-${queryKey}`,
+      `temp-login-${queryKey}`,
       (_: QueryFunctionContext) => sendLogin(loginParams),
       { retry }
     );
@@ -144,28 +145,30 @@ function createTokenQuery<TToken, TLoginParams>({
     return { data, isFetching, error, requestLogin };
   };
 
-  // const useToken = () => {
-  //   const existingToken = queryClient.getQueryData(queryKey) as TToken;
-  //   const [token, setToken] = useState<TToken | undefined>(existingToken);
-  //
-  //   useEffect(() => {
-  //     const unsubscribe = queryClient.subscribe((newQueryCache) => {
-  //       const newToken = newQueryCache.getQueryData([queryKey]) as
-  //         | TToken
-  //         | undefined;
-  //
-  //       if (!isEqual(token, newToken)) {
-  //         setToken(newToken);
-  //       }
-  //     });
-  //
-  //     return () => {
-  //       unsubscribe();
-  //     };
-  //   });
-  //
-  //   return token;
-  // };
+  const useToken = () => {
+    const existingToken = queryClient.getQueryData(queryKey) as TToken;
+    const [token, setToken] = useState<TToken | undefined>(existingToken);
+
+    useEffect(() => {
+      const observer = new QueryObserver(queryClient, {
+        queryKey,
+        enabled: false,
+      });
+
+      const unsubscribe = observer.subscribe((result) => {
+        if (result.data && !isEqual(token, result.data)) {
+          // @ts-ignore
+          setToken(newToken);
+        }
+      });
+
+      return () => {
+        unsubscribe();
+      };
+    });
+
+    return token;
+  };
 
   const getToken = async (force = false) => {
     const token = queryClient.getQueryData(queryKey) as TToken | undefined;
@@ -196,7 +199,7 @@ function createTokenQuery<TToken, TLoginParams>({
 
     const token = getTokenFromStorage();
 
-    if (!token || refreshExpired(token)) {
+    if (!token || (await refreshExpired(token))) {
       setTokenValue(undefined);
 
       return;
@@ -209,7 +212,7 @@ function createTokenQuery<TToken, TLoginParams>({
     }
   };
 
-  return { init, useLogin, logout, refresh, getToken };
+  return { init, useLogin, useToken, logout, refresh, getToken };
 }
 
 export default createTokenQuery;
