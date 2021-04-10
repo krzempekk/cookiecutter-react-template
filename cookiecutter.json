@@ -1,0 +1,7 @@
+{
+  "root_folder_name": "frontend",
+  "project_name": "Template App",
+  "_copy_without_render": [
+    "src/commons/apiEndpoints.ts"
+  ]
+}
